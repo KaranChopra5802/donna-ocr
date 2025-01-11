@@ -260,21 +260,36 @@ def process_folder(folder_path):
 @app.route('/api/process-ocr', methods=['POST'])
 def process_ocr():
     print("Received POST request to /api/process-ocr")
+
     if request.method == 'POST':
-        data = request.json
-        # print(f"Received data: {data}")
-        if not data or 'folderPath' not in data:
+        folder_path = request.form.get('folderPath', None)
+        if not folder_path:
             return jsonify({"error": "No folder path provided"}), 400
 
-        folder_path = data['folderPath']
-        # print(f"Processing folder: {folder_path}")
+            # Ensure there are files in the request
+        files = request.files.getlist('files')
+        if not files:
+            return jsonify({"error": "No files provided"}), 400
 
+            # Create a directory to save the files temporarily
+        temp_folder = 'temp_folder'
+        if not os.path.exists(temp_folder):
+            os.makedirs(temp_folder)
+
+            # Save the files temporarily to the server
+        for file in files:
+            file_path = os.path.join(temp_folder, file.filename)
+            file.save(file_path)
+            print(f"Saved file: {file.filename} at {file_path}")
+
+            # Now process the files (implement your OCR processing)
         def generate():
-            for result in process_folder(folder_path):
-                # Print only first 100 characters
-                # print(f"OCR output: {result}...")
-                yield f"data: {result}\n\n"
+            for file in os.listdir(temp_folder):
+                file_path = os.path.join(temp_folder, file)
+                    # Process the file (this is just an example; replace with actual OCR logic)
+                yield f"data: Processed {file_path}\n\n"
 
+            # Return the streaming response with OCR results
         return Response(generate(), mimetype='text/event-stream')
 
     return jsonify({"error": "Method not allowed"}), 405

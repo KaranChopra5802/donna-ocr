@@ -99,14 +99,18 @@
       const startOCRButton = document.getElementById("startOCR");
       const progressBar = document.getElementById("progressBar");
 
+      let selectedFiles = [];
+
       selectFolderButton.addEventListener("click", () => {
         const input = document.createElement("input");
         input.type = "file";
-        input.webkitdirectory = true;
+        input.webkitdirectory = true; // Allow folder selection
         input.addEventListener("change", (e) => {
           const files = e.target.files;
-          if (files.length > 0) {
-            const folderPath = files[0].webkitRelativePath.split("/")[0];
+          selectedFiles = Array.from(files);
+          
+          if (selectedFiles.length > 0) {
+            const folderPath = selectedFiles[0].webkitRelativePath.split("/")[0];
             folderPathInput.value = folderPath;
             startOCRButton.disabled = false;
           }
@@ -116,7 +120,7 @@
 
       startOCRButton.addEventListener("click", async () => {
         const folderPath = folderPathInput.value;
-        if (!folderPath) return;
+        if (!folderPath || selectedFiles.length === 0) return;
 
         startOCRButton.disabled = true;
         progressBar.style.width = "0%";
@@ -124,16 +128,21 @@
 
         try {
           console.log("Sending request to server...");
-          const response = await fetch(
-            "https://donna-ocr.onrender.com/api/process-ocr",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ folderPath }),
-            }
-          );
+          const formData = new FormData();
+          formData.append("folderPath", folderPath);
+
+          // Append all selected files to FormData
+          selectedFiles.forEach((file) => {
+            formData.append("files[]", file);
+          });
+
+          const response = await fetch("https://donna-ocr.onrender.com/api/process-ocr",  
+          
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            method: "POST",
+            body: formData
+          });
 
           console.log("Response received:", response);
 
@@ -156,9 +165,7 @@
               const [progress, date, filepath, ...rest] = chunk.split("|");
 
               // Update progress bar
-              const progressValue = parseInt(
-                progress.replace("data: ", "").trim()
-              );
+              const progressValue = parseInt(progress.replace("data: ", "").trim());
               if (!isNaN(progressValue)) {
                 progressBar.style.width = `${progressValue}%`;
                 progressBar.textContent = `${progressValue}%`;
@@ -220,14 +227,6 @@
           startOCRButton.disabled = false;
         }
       });
-
-      function formatDateForFilename(date) {
-        const dateObj = new Date(date);
-        const day = dateObj.getDate();
-        const month = dateObj.toLocaleString("default", { month: "short" });
-        const year = dateObj.getFullYear();
-        return `${day}-${month}-${year}`;
-      }
     </script>
   </body>
 </html>
