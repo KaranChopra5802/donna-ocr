@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OCR Processor</title>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1,
+      h2 {
+        color: #333;
+      }
+      h1 {
+        text-align: center;
+      }
+      h2 {
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 10px;
+      }
+      #folderPath {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      #selectFolder,
+      #startOCR {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-bottom: 10px;
+      }
+      #selectFolder:hover,
+      #startOCR:hover {
+        background-color: #45a049;
+      }
+      #startOCR:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      #progress {
+        width: 100%;
+        height: 20px;
+        background-color: #f3f3f3;
+        border-radius: 10px;
+        margin-bottom: 10px;
+      }
+      #progressBar {
+        width: 0%;
+        height: 100%;
+        background-color: #4caf50;
+        border-radius: 10px;
+        text-align: center;
+        line-height: 20px;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>OCR Processor</h1>
+      <input
+        type="text"
+        id="folderPath"
+        readonly
+        placeholder="Selected folder path"
+      />
+      <button id="selectFolder">Select Folder</button>
+      <button id="startOCR" disabled>Start OCR</button>
+      <div id="progress">
+        <div id="progressBar">0%</div>
+      </div>
+    </div>
+
+    <script>
+      const folderPathInput = document.getElementById("folderPath");
+      const selectFolderButton = document.getElementById("selectFolder");
+      const startOCRButton = document.getElementById("startOCR");
+      const progressBar = document.getElementById("progressBar");
+
+      selectFolderButton.addEventListener("click", () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.webkitdirectory = true;
+        input.addEventListener("change", (e) => {
+          const files = e.target.files;
+          if (files.length > 0) {
+            const folderPath = files[0].webkitRelativePath.split("/")[0];
+            folderPathInput.value = folderPath;
+            startOCRButton.disabled = false;
+          }
+        });
+        input.click();
+      });
+
+      startOCRButton.addEventListener("click", async () => {
+        const folderPath = folderPathInput.value;
+        if (!folderPath) return;
+
+        startOCRButton.disabled = true;
+        progressBar.style.width = "0%";
+        progressBar.textContent = "0%";
+
+        try {
+          console.log("Sending request to server...");
+          const response = await fetch(
+            "http://localhost:8000/api/process-ocr",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ folderPath }),
+            }
+          );
+
+          console.log("Response received:", response);
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+
+          let dateDict = {};
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            console.log("Received chunk:", chunk);
+
+            if (chunk.startsWith("data: ")) {
+              const [progress, date, filepath, ...rest] = chunk.split("|");
+
+              // Update progress bar
+              const progressValue = parseInt(
+                progress.replace("data: ", "").trim()
+              );
+              if (!isNaN(progressValue)) {
+                progressBar.style.width = `${progressValue}%`;
+                progressBar.textContent = `${progressValue}%`;
+              }
+
+              // Process OCR data
+              let formattedDate = date.length > 10 ? "No date" : date;
+
+              if (dateDict[formattedDate]) {
+                dateDict[formattedDate] += `\n${rest.join("|")}`;
+              } else {
+                dateDict[formattedDate] = rest.join("|");
+              }
+            }
+          }
+
+          console.log("Final output:", dateDict);
+
+          // Create a combined file content with sorted dates
+          const sortedDates = Object.keys(dateDict)
+            .filter((date) => date !== "No date")
+            .sort((a, b) => new Date(a) - new Date(b)); // Sort by date
+
+          let combinedContent = "";
+          sortedDates.forEach((date) => {
+            combinedContent += `Date: ${date}\n${dateDict[date]}\n\n`;
+          });
+
+          // Add 'No date' content to the combined file at the end
+          if (dateDict["No date"]) {
+            combinedContent += `Date: No date\n${dateDict["No date"]}\n\n`;
+          }
+
+          // Use JSZip to create a zip file
+          const zip = new JSZip();
+
+          // Add individual files for each date
+          for (const key in dateDict) {
+            if (dateDict.hasOwnProperty(key)) {
+              const value = dateDict[key];
+              zip.file(`${key}.txt`, value);
+            }
+          }
+
+          // Add the combined file to the zip
+          zip.file("combined_dates.txt", combinedContent);
+
+          // Generate the zip file and trigger the download
+          zip.generateAsync({ type: "blob" }).then((content) => {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(content);
+            a.download = "ocr_files.zip"; // Set the zip file name
+            a.click();
+          });
+        } catch (error) {
+          console.error("Error:", error);
+          alert("An error occurred during OCR processing.");
+        } finally {
+          startOCRButton.disabled = false;
+        }
+      });
+
+      function formatDateForFilename(date) {
+        const dateObj = new Date(date);
+        const day = dateObj.getDate();
+        const month = dateObj.toLocaleString("default", { month: "short" });
+        const year = dateObj.getFullYear();
+        return `${day}-${month}-${year}`;
+      }
+    </script>
+  </body>
+</html>
