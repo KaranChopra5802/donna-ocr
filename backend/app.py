@@ -47,11 +47,11 @@ credentials = service_account.Credentials.from_service_account_info(
 client = vision.ImageAnnotatorClient(credentials=credentials)
 
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+# pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
-print("Tesseract path:", pytesseract.pytesseract.tesseract_cmd)
-print("Is Tesseract installed?", os.path.exists(
-    pytesseract.pytesseract.tesseract_cmd))
+# print("Tesseract path:", pytesseract.pytesseract.tesseract_cmd)
+# print("Is Tesseract installed?", os.path.exists(
+#     pytesseract.pytesseract.tesseract_cmd))
 
 
 def correct_image_rotation(image):
