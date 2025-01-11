@@ -14,6 +14,7 @@ from collections import defaultdict
 from google.cloud import vision
 from google.oauth2 import service_account
 from dotenv import load_dotenv
+import pytesseract
 
 app = Flask(__name__)
 CORS(app)
@@ -41,7 +42,7 @@ credentials = service_account.Credentials.from_service_account_info(
 # Initialize Google Vision client
 client = vision.ImageAnnotatorClient(credentials=credentials)
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def correct_image_rotation(image):
