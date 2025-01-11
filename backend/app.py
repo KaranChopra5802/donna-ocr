@@ -15,6 +15,10 @@ from google.cloud import vision
 from google.oauth2 import service_account
 from dotenv import load_dotenv
 import pytesseract
+from werkzeug.utils import secure_filename
+import uuid
+import shutil
+
 
 app = Flask(__name__)
 CORS(app)
@@ -63,6 +67,18 @@ def correct_image_rotation(image):
         image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
     return rotated_image
+
+
+def clean_temp_folder(folder_path):
+    try:
+        # Remove all files in the folder
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        print("Temporary folder cleaned.")
+    except Exception as e:
+        print(f"Error cleaning temporary folder: {e}")
 
 
 def process_image_with_vision(image_path):
@@ -272,22 +288,39 @@ def process_ocr():
             return jsonify({"error": "No files provided"}), 400
 
             # Create a directory to save the files temporarily
-        temp_folder = 'tmp'
+        temp_folder = 'temp'  # Relative path
+
+# Ensure the directory exists
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
+            print("Created temporary folder:", temp_folder)
 
-            # Save the files temporarily to the server
         for file in files:
-            file_path = os.path.join(temp_folder, file.filename)
-            file.save(file_path)
-            print(f"Saved file: {file.filename} at {file_path}")
+            if not file.filename:
+                return jsonify({"error": "One of the uploaded files has an empty filename"}), 400
+
+            # Sanitize and make the filename unique
+            sanitized_filename = secure_filename(file.filename)
+            unique_filename = f"{uuid.uuid4().hex}_{sanitized_filename}"
+            file_path = os.path.join(temp_folder, unique_filename)
+
+            try:
+                file.save(file_path)
+                print(f"Saved file: {unique_filename} at {file_path}")
+            except Exception as e:
+                print(
+                    f"Error saving file {unique_filename} to {file_path}: {e}")
+                return jsonify({"error": f"Failed to save file {unique_filename}"}), 500
 
             # Now process the files (implement your OCR processing)
         def generate():
-            for file in os.listdir(temp_folder):
-                file_path = os.path.join(temp_folder, file)
+            try:
+                for result in process_folder(temp_folder):
                     # Process the file (this is just an example; replace with actual OCR logic)
-                yield f"data: Processed {file_path}\n\n"
+                    yield f"data: {result}\n\n"
+            finally:
+                # Clean up the temporary folder after processing
+                clean_temp_folder(temp_folder)
 
             # Return the streaming response with OCR results
         return Response(generate(), mimetype='text/event-stream')
