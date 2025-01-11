@@ -7,7 +7,8 @@ WORKDIR /app
 # Install system dependencies including Tesseract OCR
 RUN apt-get update && \
     apt-get -qq -y install tesseract-ocr && \
-    apt-get -qq -y install libtesseract-dev
+    apt-get -qq -y install libtesseract-dev && \
+    apt install -y libgl1
 
 # Copy the current directory contents into the container
 COPY . .
