@@ -8,7 +8,8 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get -qq -y install tesseract-ocr && \
     apt-get -qq -y install libtesseract-dev && \
-    apt install -y libgl1
+    apt install -y libgl1 && \
+    apt-get install poppler-util
 
 # Copy the current directory contents into the container
 COPY . .
