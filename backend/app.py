@@ -272,7 +272,7 @@ def process_ocr():
             return jsonify({"error": "No files provided"}), 400
 
             # Create a directory to save the files temporarily
-        temp_folder = 'temp_folder'
+        temp_folder = 'tmp'
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
 
