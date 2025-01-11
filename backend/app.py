@@ -1,6 +1,6 @@
 import openai
 import spacy
-from flask import Flask, request, Response, jsonify
+from flask import Flask, json, request, Response, jsonify
 from flask_cors import CORS
 import os
 import pytesseract
@@ -23,16 +23,25 @@ load_dotenv()
 nlp = spacy.load("en_core_web_sm")
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
+credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
-# Set up tesseract command path
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Check if the environment variable is set correctly
+if credentials_json is None:
+    raise ValueError(
+        "The environment variable 'GOOGLE_APPLICATION_CREDENTIALS_JSON' is not set.")
+
+# Convert the JSON string to a Python dictionary
+credentials_info = json.loads(credentials_json)
+
+# Create credentials from the dictionary
+credentials = service_account.Credentials.from_service_account_info(
+    credentials_info)
 
 # Initialize Google Vision client
-credentials = service_account.Credentials.from_service_account_file(
-    credentials_path)
 client = vision.ImageAnnotatorClient(credentials=credentials)
+
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def correct_image_rotation(image):
