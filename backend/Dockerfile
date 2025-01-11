@@ -5,9 +5,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies including Tesseract OCR
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get -qq -y install tesseract-ocr && \
+    apt-get -qq -y install libtesseract-dev
 
 # Copy the current directory contents into the container
 COPY . .
