@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 import pytesseract
 from werkzeug.utils import secure_filename
 import uuid
+import extract_msg
 import shutil
 
 
@@ -126,6 +127,20 @@ def process_pdf(pdf_path):
         text += pytesseract.image_to_string(page)
     return text
 
+def process_msg(msg_path):
+    text = ""
+    try:
+        # Use extract_msg to read the MSG file
+        msg = extract_msg.Message(msg_path)
+        text += f"Subject: {msg.subject}\n"
+        text += f"Date: {msg.date}\n"
+        text += f"Sender: {msg.sender}\n"
+        text += f"To: {msg.to}\n\n"
+        text += f"Body:\n{msg.body}\n"
+        msg.close()
+    except Exception as e:
+        print(f"Error processing MSG: {e}")
+    return text
 
 def process_file(file_path):
     _, ext = os.path.splitext(file_path.lower())
@@ -133,6 +148,8 @@ def process_file(file_path):
         return process_image(file_path)
     elif ext == '.pdf':
         return process_pdf(file_path)
+    elif ext == '.msg':
+        return process_msg(file_path)
     else:
         return f"Unsupported file type: {file_path}"
 
