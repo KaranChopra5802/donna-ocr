@@ -323,7 +323,7 @@ def process_ocr():
 
             # Sanitize and make the filename unique
             sanitized_filename = secure_filename(file.filename)
-            unique_filename = f"{uuid.uuid4().hex}_{sanitized_filename}"
+            unique_filename = f"{sanitized_filename}"
             file_path = os.path.join(temp_folder, unique_filename)
 
             try:
