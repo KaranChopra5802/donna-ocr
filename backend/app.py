@@ -1,3 +1,4 @@
+from docx import Document
 import openai
 import spacy
 from flask import Flask, json, request, Response, jsonify
@@ -127,6 +128,7 @@ def process_pdf(pdf_path):
         text += pytesseract.image_to_string(page)
     return text
 
+
 def process_msg(msg_path):
     text = ""
     try:
@@ -142,6 +144,15 @@ def process_msg(msg_path):
         print(f"Error processing MSG: {e}")
     return text
 
+
+def process_doc(doc_path):
+    doc = Document(doc_path)
+    text = ""
+    for paragraph in doc.paragraphs:
+        text += paragraph.text + "\n"
+    return text
+
+
 def process_file(file_path):
     _, ext = os.path.splitext(file_path.lower())
     if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
@@ -150,6 +161,8 @@ def process_file(file_path):
         return process_pdf(file_path)
     elif ext == '.msg':
         return process_msg(file_path)
+    if ext in ['.doc', '.docx']:
+        return process_doc(file_path)
     else:
         return f"Unsupported file type: {file_path}"
 
