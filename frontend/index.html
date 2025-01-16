@@ -87,7 +87,7 @@
         placeholder="Selected folder path"
       />
       <button id="selectFolder">Select Folder</button>
-      <button id="startOCR" disabled>Start OCR</button>
+      <button id="startOCR" disabled>Start Scan</button>
       <div id="progress">
         <div id="progressBar">0%</div>
       </div>
@@ -105,6 +105,8 @@
         const input = document.createElement("input");
         input.type = "file";
         input.webkitdirectory = true; // Allow folder selection
+        progressBar.style.width = "0%";
+        progressBar.textContent = "0%";
         input.addEventListener("change", (e) => {
           const files = e.target.files;
           selectedFiles = Array.from(files);
@@ -124,6 +126,7 @@
         if (!folderPath || selectedFiles.length === 0) return;
 
         startOCRButton.disabled = true;
+        startOCRButton.textContent = "Scanning...";
         progressBar.style.width = "0%";
         progressBar.textContent = "0%";
 
