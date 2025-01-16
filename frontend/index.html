@@ -116,6 +116,8 @@
               selectedFiles[0].webkitRelativePath.split("/")[0];
             folderPathInput.value = folderPath;
             startOCRButton.disabled = false;
+            startOCRButton.textContent = "Start Scan";
+            alert("Folder uploaded. You can start the scanning now.");
           }
         });
         input.click();
@@ -263,6 +265,8 @@
           alert("An error occurred during OCR processing.");
         } finally {
           startOCRButton.disabled = false;
+          startOCRButton.textContent = "Start Scan";
+          
         }
       });
     </script>
