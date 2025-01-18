@@ -1,22 +1,24 @@
-# Use a lightweight Python image
+# Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Install necessary system dependencies
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr libtesseract-dev libgl1 poppler-utils && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install system dependencies including Tesseract OCR
+RUN apt-get update && \
+    apt-get -qq -y install tesseract-ocr && \
+    apt-get -qq -y install libtesseract-dev && \
+    apt install -y libgl1 && \
+    apt-get install -y poppler-utils
 
-# Copy project files
+# Copy the current directory contents into the container
 COPY . .
 
-# Install Python dependencies
+# Install any Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the application port
 EXPOSE 8000
 
-# Use Gunicorn with threading to optimize for low CPU/memory
-CMD ["gunicorn", "--workers", "1", "--threads", "4", "--timeout", "600", "--bind", "0.0.0.0:8000", "app:app"]
+# Command to run the application
+CMD ["gunicorn", "--timeout", "600","app:app"]
