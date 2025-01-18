@@ -15,12 +15,10 @@ from collections import defaultdict
 from google.cloud import vision
 from google.oauth2 import service_account
 from dotenv import load_dotenv
-import pytesseract
 from werkzeug.utils import secure_filename
-import uuid
 import extract_msg
-import shutil
-
+import tempfile
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 CORS(app)
@@ -33,27 +31,16 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
-# Check if the environment variable is set correctly
 if credentials_json is None:
     raise ValueError(
         "The environment variable 'GOOGLE_APPLICATION_CREDENTIALS_JSON' is not set.")
 
-# Convert the JSON string to a Python dictionary
 credentials_info = json.loads(credentials_json)
-
-# Create credentials from the dictionary
 credentials = service_account.Credentials.from_service_account_info(
     credentials_info)
-
-# Initialize Google Vision client
 client = vision.ImageAnnotatorClient(credentials=credentials)
 
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-# pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-
-# print("Tesseract path:", pytesseract.pytesseract.tesseract_cmd)
-# print("Is Tesseract installed?", os.path.exists(
-#     pytesseract.pytesseract.tesseract_cmd))
 
 
 def correct_image_rotation(image):
@@ -78,7 +65,6 @@ def correct_image_rotation(image):
 
 def clean_temp_folder(folder_path):
     try:
-        # Remove all files in the folder
         for filename in os.listdir(folder_path):
             file_path = os.path.join(folder_path, filename)
             if os.path.isfile(file_path):
@@ -103,14 +89,6 @@ def process_image_with_vision(image_path):
 
 
 def process_image(image_path):
-    # img = cv2.imread(image_path)
-    # img = correct_image_rotation(img)
-
-    # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # denoised = cv2.fastNlMeansDenoising(gray)
-    # _, binary = cv2.threshold(
-    #     denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
     vision_text = process_image_with_vision(image_path)
 
     if vision_text.strip():
@@ -121,18 +99,79 @@ def process_image(image_path):
         return text
 
 
+def normalize_text(text):
+    """
+    Clean up OCR output to fix spacing and line break issues.
+    """
+    # Replace multiple spaces with a single space
+    text = re.sub(r'\s+', ' ', text)
+
+    # Remove unnecessary spaces around punctuation
+    text = re.sub(r'\s([.,:;?!])', r'\1', text)
+
+    # Ensure line breaks after headers and sections
+    # Add newline after periods if followed by text
+    text = re.sub(r'(?<=\.)\s*(?=\S)', '\n', text)
+
+    return text.strip()
+
+
 def process_pdf(pdf_path):
-    pages = convert_from_path(pdf_path)
     text = ""
-    for page in pages:
-        text += pytesseract.image_to_string(page)
+    with tempfile.TemporaryDirectory() as path:
+        images = convert_from_path(
+            pdf_path, output_folder=path, dpi=300, fmt='png')
+        for i, image in enumerate(images):
+            temp_image_path = os.path.join(path, f'page_{i}.png')
+            image.save(temp_image_path, 'PNG')
+
+            # Use Tesseract with hOCR output to maintain formatting
+            hocr_output = pytesseract.image_to_pdf_or_hocr(
+                temp_image_path, extension='hocr')
+
+            # Process hOCR to extract formatted text
+            page_text = process_hocr(hocr_output)
+
+            cleaned_result = clean_text(page_text)
+
+            # Additional cleanup: remove excess spaces and normalize line breaks
+            cleaned_result = normalize_text(cleaned_result)
+
+            # Add page number and cleaned content
+            text += f"--- Page {i+1} ---\n\n{cleaned_result}\n\n"
+
+    return text
+
+
+def process_hocr(hocr_content):
+    soup = BeautifulSoup(hocr_content, 'html.parser')
+    lines = soup.find_all('span', class_='ocr_line')
+
+    formatted_text = ""
+    for line in lines:
+        words = line.find_all('span', class_='ocrx_word')
+        line_text = ' '.join(word.get_text() for word in words)
+        formatted_text += line_text + '\n'
+
+    return formatted_text
+
+
+def clean_text(text):
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # Remove common OCR artifacts
+    text = re.sub(r'[|]', '', text)
+
+    # Merge split words
+    text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
+
     return text
 
 
 def process_msg(msg_path):
     text = ""
     try:
-        # Use extract_msg to read the MSG file
         msg = extract_msg.Message(msg_path)
         text += f"Subject: {msg.subject}\n"
         text += f"Date: {msg.date}\n"
@@ -161,29 +200,20 @@ def process_file(file_path):
         return process_pdf(file_path)
     elif ext == '.msg':
         return process_msg(file_path)
-    if ext in ['.doc', '.docx']:
+    elif ext in ['.doc', '.docx']:
         return process_doc(file_path)
     else:
         return f"Unsupported file type: {file_path}"
 
 
 def refine_text_with_spacy(ocr_text):
-    """
-    Refine the OCR output to remove noise and extract structured data.
-    """
-    # Pre-clean the text
-    ocr_text = re.sub(r"[✓✔]+", "", ocr_text)  # Remove tick marks
-    ocr_text = re.sub(r"[←→«»]+", "", ocr_text)  # Remove arrow symbols
-    # Remove "Edited" timestamps
+    ocr_text = re.sub(r"[✓✔]+", "", ocr_text)
+    ocr_text = re.sub(r"[←→«»]+", "", ocr_text)
     ocr_text = re.sub(r"\bEdited\b.*\b\d{1,2}:\d{2} (?:AM|PM)", "", ocr_text)
-    # Remove standalone timestamps
     ocr_text = re.sub(r"\b\d{1,2}:\d{2} (?:AM|PM)\b", "", ocr_text)
-    # Remove network indicators
     ocr_text = re.sub(r"\b[4G|LTE]+\b", "", ocr_text)
-    # Remove extra spaces and line breaks
     ocr_text = re.sub(r"\s+", " ", ocr_text).strip()
 
-    # Remove duplicates
     lines = ocr_text.splitlines()
     seen_lines = set()
     deduplicated_lines = []
@@ -192,16 +222,12 @@ def refine_text_with_spacy(ocr_text):
             deduplicated_lines.append(line)
             seen_lines.add(line)
 
-    # Join deduplicated lines
     deduplicated_text = "\n".join(deduplicated_lines)
 
-    # Process text with spaCy
     doc = nlp(deduplicated_text)
 
-    # Extract dates using Named Entity Recognition
     dates = [ent.text for ent in doc.ents if ent.label_ == "DATE"]
 
-    # Join cleaned tokens
     cleaned_text = " ".join([token.text for token in doc])
 
     return {
@@ -219,7 +245,7 @@ def refine_text_with_chatgpt(refined_data):
                 "content": "You are a helpful assistant that refines OCR text and writes a summary in the end. The text can be of many different platforms like teams, gmail, slack, etc. Remove the noise accordingly. Return the text as well as the summary."
             }, {
                 "role": "user",
-                "content": f"Refine the following text imporve ocr and improve clarity:\n\n{refined_data}"
+                "content": f"Refine the following text improve ocr and improve clarity:\n\n{refined_data}"
             }],
             max_tokens=1000
         )
@@ -228,6 +254,25 @@ def refine_text_with_chatgpt(refined_data):
     except Exception as e:
         print(f"Error refining text with ChatGPT: {e}")
         return refined_data
+
+
+def extract_date_with_regex(text):
+    # This regex pattern looks for common date formats
+    date_patterns = [
+        r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',  # dd/mm/yyyy or dd-mm-yyyy
+        r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',  # yyyy/mm/dd or yyyy-mm-dd
+        # Month DD, YYYY
+        r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b',
+        # DD Month YYYY
+        r'\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b',
+    ]
+
+    for pattern in date_patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group()
+
+    return "No date found"
 
 
 def extract_dates_with_chatgpt(refined_data):
@@ -266,14 +311,20 @@ def process_folder(folder_path):
 
             text = process_file(file_path)
 
-            refined_data = refine_text_with_spacy(text)
+            # Check word count
+            word_count = len(text.split())
 
-            refined_data_with_chatgpt = refine_text_with_chatgpt(refined_data)
-
-            date = extract_dates_with_chatgpt(refined_data_with_chatgpt)
-            # date = dates[0] if dates else "No Date"
-
-            print(date)
+            if word_count <= 1000:
+                refined_data = refine_text_with_spacy(text)
+                refined_data_with_chatgpt = refine_text_with_chatgpt(
+                    refined_data['cleaned_text'])
+                date = extract_dates_with_chatgpt(refined_data_with_chatgpt)
+            else:
+                refined_data = refine_text_with_spacy(text)
+                # Skip ChatGPT refinement
+                refined_data_with_chatgpt = refined_data['cleaned_text']
+                # Extract date from first page/line
+                date = extract_date_with_regex(text.split('\n', 1)[0])
 
             text_by_date[date].append((file_path, refined_data_with_chatgpt))
 
@@ -283,29 +334,21 @@ def process_folder(folder_path):
 
     def parse_date(date_str):
         try:
-            # First, try parsing as "%B %d, %Y" (e.g., "August 19, 2024")
             return datetime.strptime(date_str, "%B %d, %Y")
         except ValueError:
             pass
 
         try:
-            # If that fails, try parsing as "%d/%m/%Y" (e.g., "19/08/2024")
             return datetime.strptime(date_str, "%d/%m/%Y")
         except ValueError:
             pass
 
-        # If both fail, return None
         return None
 
-    # After processing all files, yield the sorted results
     sorted_dates = sorted(
         text_by_date.keys(),
-        key=lambda x: parse_date(x) if parse_date(
-            x) else datetime.max  # Treat None as max date
+        key=lambda x: parse_date(x) if parse_date(x) else datetime.max
     )
-
-    # for date in sorted_dates:
-    #     yield f"100|RESULT|{date}|" + "|".join([f"{file_path}:{text}" for file_path, text in text_by_date[date]])
 
 
 @app.route('/api/process-ocr', methods=['POST'])
@@ -317,15 +360,12 @@ def process_ocr():
         if not folder_path:
             return jsonify({"error": "No folder path provided"}), 400
 
-            # Ensure there are files in the request
         files = request.files.getlist('files')
         if not files:
             return jsonify({"error": "No files provided"}), 400
 
-            # Create a directory to save the files temporarily
-        temp_folder = 'temp'  # Relative path
+        temp_folder = 'temp'
 
-# Ensure the directory exists
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
             print("Created temporary folder:", temp_folder)
@@ -334,7 +374,6 @@ def process_ocr():
             if not file.filename:
                 return jsonify({"error": "One of the uploaded files has an empty filename"}), 400
 
-            # Sanitize and make the filename unique
             sanitized_filename = secure_filename(file.filename)
             unique_filename = f"{sanitized_filename}"
             file_path = os.path.join(temp_folder, unique_filename)
@@ -347,17 +386,13 @@ def process_ocr():
                     f"Error saving file {unique_filename} to {file_path}: {e}")
                 return jsonify({"error": f"Failed to save file {unique_filename}"}), 500
 
-            # Now process the files (implement your OCR processing)
         def generate():
             try:
                 for result in process_folder(temp_folder):
-                    # Process the file (this is just an example; replace with actual OCR logic)
                     yield f"data: {result}\n\n"
             finally:
-                # Clean up the temporary folder after processing
                 clean_temp_folder(temp_folder)
 
-            # Return the streaming response with OCR results
         return Response(generate(), mimetype='text/event-stream')
 
     return jsonify({"error": "Method not allowed"}), 405
@@ -370,6 +405,5 @@ def test():
 
 if __name__ == '__main__':
     print("Starting Flask server on port 8000")
-    # Default to 5000 if no PORT is set
     port = int(os.environ.get('PORT', 5000))
     app.run(host="0.0.0.0", port=port)
