@@ -20,7 +20,7 @@ import extract_msg
 import tempfile
 from bs4 import BeautifulSoup
 
-import fitz  
+import fitz
 
 app = Flask(__name__)
 CORS(app)
@@ -101,33 +101,52 @@ def process_image(image_path):
         return text
 
 
-def normalize_text(text):
-    """
-    Clean up OCR output to fix spacing and line break issues.
-    """
-    # Replace multiple spaces with a single space
-    text = re.sub(r'\s+', ' ', text)
-
-    # Remove unnecessary spaces around punctuation
-    text = re.sub(r'\s([.,:;?!])', r'\1', text)
-
-    # Ensure line breaks after headers and sections
-    # Add newline after periods if followed by text
-    text = re.sub(r'(?<=\.)\s*(?=\S)', '\n', text)
-
-    return text.strip()
-
-
-def process_pdf(pdf_path):
+def process_pdf(pdf_path, chunk_size=5):
     doc = fitz.open(pdf_path)
+    total_pages = len(doc)
     text = ""
-    for i, page in enumerate(doc):
-        page_text = page.get_text()
-        cleaned_result = clean_text(page_text)
-        cleaned_result = normalize_text(cleaned_result)
-        text += f"--- Page {i+1} ---\n\n{cleaned_result}\n\n"
+
+    for start_page in range(0, total_pages, chunk_size):
+        end_page = min(start_page + chunk_size, total_pages)
+        chunk_text = ""
+
+        for i in range(start_page, end_page):
+            page = doc[i]
+            page_text = page.get_text()
+            cleaned_result = clean_text(page_text)
+            cleaned_result = normalize_text(cleaned_result)
+            chunk_text += f"\r\n{'='*40}\r\nPage {i+1}\r\n{'='*40}\r\n\n{cleaned_result}\r\n"
+
+        text += chunk_text
+
+        # Yield progress and chunk text
+        progress = int((end_page / total_pages) * 100)
+        yield progress, chunk_text
+
     doc.close()
     return text
+
+
+def clean_text(text):
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    # Remove common OCR artifacts
+    text = re.sub(r'[|]', '', text)
+    # Merge split words
+    text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
+    # Add line breaks after sentences
+    text = re.sub(r'(\.\s)([A-Z])', r'\1\n\2', text)
+    return text
+
+
+def normalize_text(text):
+    # Replace multiple spaces with a single space
+    text = re.sub(r'\s+', ' ', text)
+    # Remove unnecessary spaces around punctuation
+    text = re.sub(r'\s([.,:;?!])', r'\1', text)
+    # Ensure line breaks after headers and sections
+    text = re.sub(r'(?<=\.)\s*(?=\S)', '\n', text)
+    return text.strip()
 
 
 def process_hocr(hocr_content):
@@ -296,28 +315,46 @@ def process_folder(folder_path):
             processed_files += 1
             progress = int((processed_files / total_files) * 100)
 
-            text = process_file(file_path)
+            if file_path.lower().endswith('.pdf'):
+                final_text = ""
+                for progress, text in process_pdf(file_path):
+                    refined_data = refine_text_with_spacy(text)
+                    # Skip ChatGPT refinement
+                    refined_data_with_chatgpt = refined_data['cleaned_text']
+                    # Extract date from first page/line
+                    date = extract_date_with_regex(text.split('\n', 1)[0])
+
+                    text_by_date[date].append(
+                        (file_path, refined_data_with_chatgpt))
+
+                    final_text += refined_data_with_chatgpt
+
+                yield f"{progress}|PDF|{file_path}|{final_text}\n\n"
+            else:
+                text = process_file(file_path)
+                word_count = len(text.split())
+
+                if word_count <= 1000:
+                    refined_data = refine_text_with_spacy(text)
+                    refined_data_with_chatgpt = refine_text_with_chatgpt(
+                        refined_data['cleaned_text'])
+                    date = extract_dates_with_chatgpt(
+                        refined_data_with_chatgpt)
+                else:
+                    refined_data = refine_text_with_spacy(text)
+                    # Skip ChatGPT refinement
+                    refined_data_with_chatgpt = refined_data['cleaned_text']
+                    # Extract date from first page/line
+                    date = extract_date_with_regex(text.split('\n', 1)[0])
+
+                text_by_date[date].append(
+                    (file_path, refined_data_with_chatgpt))
+
+                yield f"{progress}|{date}|{file_path}|{refined_data_with_chatgpt}\n\n"
+
+            # text = process_file(file_path)
 
             # Check word count
-            word_count = len(text.split())
-
-            if word_count <= 1000:
-                refined_data = refine_text_with_spacy(text)
-                refined_data_with_chatgpt = refine_text_with_chatgpt(
-                    refined_data['cleaned_text'])
-                date = extract_dates_with_chatgpt(refined_data_with_chatgpt)
-            else:
-                refined_data = refine_text_with_spacy(text)
-                # Skip ChatGPT refinement
-                refined_data_with_chatgpt = refined_data['cleaned_text']
-                # Extract date from first page/line
-                date = extract_date_with_regex(text.split('\n', 1)[0])
-
-            text_by_date[date].append((file_path, refined_data_with_chatgpt))
-
-            print(f"{progress}|{date}|{file_path}|{refined_data_with_chatgpt}")
-
-            yield f"{progress}|{date}|{file_path}|{refined_data_with_chatgpt}"
 
     def parse_date(date_str):
         try:
