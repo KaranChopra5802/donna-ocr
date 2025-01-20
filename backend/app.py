@@ -337,7 +337,7 @@ def process_folder(folder_path):
                 if word_count <= 1000:
                     refined_data = text
                     refined_data_with_chatgpt = refine_text_with_chatgpt(
-                        refined_data['cleaned_text'])
+                        refined_data)
                     date = extract_dates_with_chatgpt(
                         refined_data_with_chatgpt)
                 else:
