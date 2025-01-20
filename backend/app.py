@@ -262,7 +262,7 @@ def refine_text_with_chatgpt(refined_data):
         print(f"Error refining text with ChatGPT: {e}")
         return refined_data
     finally:
-        del chunk
+        del response
         gc.collect()
 
 
