@@ -20,6 +20,8 @@ import extract_msg
 import tempfile
 from bs4 import BeautifulSoup
 
+import fitz  
+
 app = Flask(__name__)
 CORS(app)
 
@@ -117,29 +119,14 @@ def normalize_text(text):
 
 
 def process_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
     text = ""
-    with tempfile.TemporaryDirectory() as path:
-        images = convert_from_path(
-            pdf_path, output_folder=path, dpi=300, fmt='png')
-        for i, image in enumerate(images):
-            temp_image_path = os.path.join(path, f'page_{i}.png')
-            image.save(temp_image_path, 'PNG')
-
-            # Use Tesseract with hOCR output to maintain formatting
-            hocr_output = pytesseract.image_to_pdf_or_hocr(
-                temp_image_path, extension='hocr')
-
-            # Process hOCR to extract formatted text
-            page_text = process_hocr(hocr_output)
-
-            cleaned_result = clean_text(page_text)
-
-            # Additional cleanup: remove excess spaces and normalize line breaks
-            cleaned_result = normalize_text(cleaned_result)
-
-            # Add page number and cleaned content
-            text += f"--- Page {i+1} ---\n\n{cleaned_result}\n\n"
-
+    for i, page in enumerate(doc):
+        page_text = page.get_text()
+        cleaned_result = clean_text(page_text)
+        cleaned_result = normalize_text(cleaned_result)
+        text += f"--- Page {i+1} ---\n\n{cleaned_result}\n\n"
+    doc.close()
     return text
 
 

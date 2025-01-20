@@ -145,8 +145,8 @@
           console.log("Form data:", formData);
 
           const response = await fetch(
-            "https://donna-ocr.onrender.com/api/process-ocr",
-            // "http://192.168.1.68:5000/api/process-ocr",
+            // "http://donna-ocr-production.up.railway.app/api/process-ocr",
+            "http://192.168.20.60:5000/api/process-ocr",
             {
               method: "POST",
               body: formData,
