@@ -320,7 +320,7 @@ def process_folder(folder_path):
                 for progress, text in process_pdf(file_path):
                     refined_data = text
                     # Skip ChatGPT refinement
-                    refined_data_with_chatgpt = refined_data['cleaned_text']
+                    refined_data_with_chatgpt = refined_data
                     # Extract date from first page/line
                     date = extract_date_with_regex(text.split('\n', 1)[0])
 
@@ -343,7 +343,7 @@ def process_folder(folder_path):
                 else:
                     refined_data = text
                     # Skip ChatGPT refinement
-                    refined_data_with_chatgpt = refined_data['cleaned_text']
+                    refined_data_with_chatgpt = text
                     # Extract date from first page/line
                     date = extract_date_with_regex(text.split('\n', 1)[0])
 
