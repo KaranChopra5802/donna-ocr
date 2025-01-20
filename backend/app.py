@@ -356,8 +356,7 @@ def process_folder(folder_path):
 
                 yield f"{progress}|{date}|{file_path}|{refined_data_with_chatgpt}\n\n"
 
-            del content
-            del refined_content
+            del refined_data_with_chatgpt
             gc.collect()
 
             # text = process_file(file_path)
