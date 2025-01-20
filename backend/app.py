@@ -27,7 +27,7 @@ CORS(app)
 
 load_dotenv()
 
-nlp = spacy.load("en_core_web_sm")
+# nlp = spacy.load("en_core_web_sm")
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -212,34 +212,34 @@ def process_file(file_path):
         return f"Unsupported file type: {file_path}"
 
 
-def refine_text_with_spacy(ocr_text):
-    ocr_text = re.sub(r"[✓✔]+", "", ocr_text)
-    ocr_text = re.sub(r"[←→«»]+", "", ocr_text)
-    ocr_text = re.sub(r"\bEdited\b.*\b\d{1,2}:\d{2} (?:AM|PM)", "", ocr_text)
-    ocr_text = re.sub(r"\b\d{1,2}:\d{2} (?:AM|PM)\b", "", ocr_text)
-    ocr_text = re.sub(r"\b[4G|LTE]+\b", "", ocr_text)
-    ocr_text = re.sub(r"\s+", " ", ocr_text).strip()
+# def refine_text_with_spacy(ocr_text):
+#     ocr_text = re.sub(r"[✓✔]+", "", ocr_text)
+#     ocr_text = re.sub(r"[←→«»]+", "", ocr_text)
+#     ocr_text = re.sub(r"\bEdited\b.*\b\d{1,2}:\d{2} (?:AM|PM)", "", ocr_text)
+#     ocr_text = re.sub(r"\b\d{1,2}:\d{2} (?:AM|PM)\b", "", ocr_text)
+#     ocr_text = re.sub(r"\b[4G|LTE]+\b", "", ocr_text)
+#     ocr_text = re.sub(r"\s+", " ", ocr_text).strip()
 
-    lines = ocr_text.splitlines()
-    seen_lines = set()
-    deduplicated_lines = []
-    for line in lines:
-        if line not in seen_lines:
-            deduplicated_lines.append(line)
-            seen_lines.add(line)
+#     lines = ocr_text.splitlines()
+#     seen_lines = set()
+#     deduplicated_lines = []
+#     for line in lines:
+#         if line not in seen_lines:
+#             deduplicated_lines.append(line)
+#             seen_lines.add(line)
 
-    deduplicated_text = "\n".join(deduplicated_lines)
+#     deduplicated_text = "\n".join(deduplicated_lines)
 
-    doc = nlp(deduplicated_text)
+#     doc = nlp(deduplicated_text)
 
-    dates = [ent.text for ent in doc.ents if ent.label_ == "DATE"]
+#     dates = [ent.text for ent in doc.ents if ent.label_ == "DATE"]
 
-    cleaned_text = " ".join([token.text for token in doc])
+#     cleaned_text = " ".join([token.text for token in doc])
 
-    return {
-        "cleaned_text": cleaned_text.strip(),
-        "dates": dates
-    }
+#     return {
+#         "cleaned_text": cleaned_text.strip(),
+#         "dates": dates
+#     }
 
 
 def refine_text_with_chatgpt(refined_data):
@@ -318,7 +318,7 @@ def process_folder(folder_path):
             if file_path.lower().endswith('.pdf'):
                 final_text = ""
                 for progress, text in process_pdf(file_path):
-                    refined_data = refine_text_with_spacy(text)
+                    refined_data = text
                     # Skip ChatGPT refinement
                     refined_data_with_chatgpt = refined_data['cleaned_text']
                     # Extract date from first page/line
@@ -335,13 +335,13 @@ def process_folder(folder_path):
                 word_count = len(text.split())
 
                 if word_count <= 1000:
-                    refined_data = refine_text_with_spacy(text)
+                    refined_data = text
                     refined_data_with_chatgpt = refine_text_with_chatgpt(
                         refined_data['cleaned_text'])
                     date = extract_dates_with_chatgpt(
                         refined_data_with_chatgpt)
                 else:
-                    refined_data = refine_text_with_spacy(text)
+                    refined_data = text
                     # Skip ChatGPT refinement
                     refined_data_with_chatgpt = refined_data['cleaned_text']
                     # Extract date from first page/line
