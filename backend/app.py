@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 import extract_msg
 import tempfile
 from bs4 import BeautifulSoup
+import gc
 
 import fitz
 
@@ -260,6 +261,9 @@ def refine_text_with_chatgpt(refined_data):
     except Exception as e:
         print(f"Error refining text with ChatGPT: {e}")
         return refined_data
+    finally:
+        del chunk
+        gc.collect()
 
 
 def extract_date_with_regex(text):
@@ -351,6 +355,10 @@ def process_folder(folder_path):
                     (file_path, refined_data_with_chatgpt))
 
                 yield f"{progress}|{date}|{file_path}|{refined_data_with_chatgpt}\n\n"
+
+            del content
+            del refined_content
+            gc.collect()
 
             # text = process_file(file_path)
 
