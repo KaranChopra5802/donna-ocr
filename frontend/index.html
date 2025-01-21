@@ -204,7 +204,8 @@
               fileTextDict[newFileName] = textContent;
             }else{
               textContent = chunk;
-              fileTextDict[newFileName] = textContent;
+              let origialFileName = fileTextDict[newFileName];
+              fileTextDict[newFileName] = origialFileName + textContent;
               if (dateDict[formattedDate]) {
                 dateDict[formattedDate] += `\n${textContent}`;
               } else {
