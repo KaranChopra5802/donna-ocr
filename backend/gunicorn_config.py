@@ -10,7 +10,7 @@ workers = multiprocessing.cpu_count() * 2 + 1
 worker_class = 'sync'  # 'sync' is generally a safe default for most Flask apps
 
 # Timeout for workers in seconds
-timeout = 30  # Adjust if needed
+timeout = 60  # Adjust if needed
 
 # Log level for Gunicorn logs
 loglevel = 'info'
