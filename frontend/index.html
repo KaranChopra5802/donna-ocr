@@ -164,6 +164,7 @@
 
           let dateDict = {};
           let fileTextDict = {};
+          let newFileName = "";
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -197,7 +198,7 @@
               }
 
               // Add to fileTextDict for individual file storage
-              const newFileName = `${formattedDate}_${fileName}`;
+              newFileName = `${formattedDate}_${fileName}`;
               fileTextDict[newFileName] = textContent;
             }else{
               fileTextDict[newFileName] = textContent;
