@@ -145,8 +145,8 @@
           console.log("Form data:", formData);
 
           const response = await fetch(
-            "https://donna-ocr.onrender.com/api/process-ocr",
-            // "http://192.168.20.60:5000/api/process-ocr",
+            //"https://donna-ocr.onrender.com/api/process-ocr",
+             "http://192.168.1.68:5000/api/process-ocr",
             {
               method: "POST",
               body: formData,
@@ -199,6 +199,13 @@
               // Add to fileTextDict for individual file storage
               const newFileName = `${formattedDate}_${fileName}`;
               fileTextDict[newFileName] = textContent;
+            }else{
+              fileTextDict[newFileName] = textContent;
+              if (dateDict[formattedDate]) {
+                dateDict[formattedDate] += `\n${textContent}`;
+              } else {
+                dateDict[formattedDate] = textContent;
+              }
             }
           }
 

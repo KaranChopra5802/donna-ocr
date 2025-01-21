@@ -321,19 +321,23 @@ def process_folder(folder_path):
 
             if file_path.lower().endswith('.pdf'):
                 final_text = ""
+                date = "No date found"  # Initialize date
+
+                # Process the entire PDF
                 for progress, text in process_pdf(file_path):
                     refined_data = text
                     # Skip ChatGPT refinement
                     refined_data_with_chatgpt = refined_data
-                    # Extract date from first page/line
-                    date = extract_date_with_regex(text.split('\n', 1)[0])
 
-                    text_by_date[date].append(
-                        (file_path, refined_data_with_chatgpt))
+                    # Extract date from the first page/line only
+                    if date == "No date found":
+                        date = extract_date_with_regex(text.split('\n', 1)[0])
 
+                    # Accumulate the text for the entire PDF
                     final_text += refined_data_with_chatgpt
 
-                yield f"{progress}|PDF|{file_path}|{final_text}\n\n"
+                # Ensure final_text is complete before yielding
+                yield f"{progress}|{date}|{file_path}|{final_text}\n\n"
             else:
                 text = process_file(file_path)
                 word_count = len(text.split())
