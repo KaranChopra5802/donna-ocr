@@ -203,6 +203,7 @@
               newFileName = `${formattedDate}_${fileName}`;
               fileTextDict[newFileName] = textContent;
             }else{
+              textContent = chunk;
               fileTextDict[newFileName] = textContent;
               if (dateDict[formattedDate]) {
                 dateDict[formattedDate] += `\n${textContent}`;
