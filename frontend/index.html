@@ -165,6 +165,7 @@
           let dateDict = {};
           let fileTextDict = {};
           let newFileName = "";
+          let textContent = "";
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -188,7 +189,7 @@
               let formattedDate = date.length > 10 ? "No date" : date;
 
               const fileName = filepath.split("/").pop(); // Extract file name
-              const textContent = rest.join("|"); // OCR content
+              textContent = rest.join("|"); // OCR content
 
               // Add to dateDict
               if (dateDict[formattedDate]) {
