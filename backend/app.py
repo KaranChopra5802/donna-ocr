@@ -1,4 +1,5 @@
 from docx import Document
+import nltk
 import openai
 import spacy
 from flask import Flask, json, request, Response, jsonify
@@ -15,11 +16,13 @@ from collections import defaultdict
 from google.cloud import vision
 from google.oauth2 import service_account
 from dotenv import load_dotenv
+from spellchecker import SpellChecker
 from werkzeug.utils import secure_filename
 import extract_msg
 import tempfile
 from bs4 import BeautifulSoup
 import gc
+from nltk.tokenize import sent_tokenize
 
 import fitz
 
@@ -33,6 +36,8 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+# nltk.download('punkt', quiet=True)
 
 if credentials_json is None:
     raise ValueError(
@@ -249,12 +254,12 @@ def refine_text_with_chatgpt(refined_data):
             model="gpt-3.5-turbo",
             messages=[{
                 "role": "system",
-                "content": "You are a helpful assistant that refines OCR text and writes a summary in the end. The text can be of many different platforms like teams, gmail, slack, etc. Remove the noise accordingly. Return the text as well as the summary."
+                "content": "Improve the text. Try to be verbatim."
             }, {
                 "role": "user",
-                "content": f"Refine the following text improve ocr and improve clarity:\n\n{refined_data}"
+                "content": f"Refine the text verbatim.\n\n{refined_data}"
             }],
-            max_tokens=1000
+            max_tokens=2000
         )
 
         return response.choices[0].message['content'].strip()
@@ -296,7 +301,7 @@ def extract_dates_with_chatgpt(refined_data):
                 "role": "user",
                 "content": f"Find the date from this data :\n\n{refined_data}. And return only the date in dd-mm-yyyy format, no other text, nothing. The output should only be of 10 characters or less."
             }],
-            max_tokens=1000
+            max_tokens=2000
         )
 
         # print(response['choices'][0]['message']['content'].strip())
@@ -318,29 +323,48 @@ def process_folder(folder_path):
             file_path = os.path.join(root, file)
             processed_files += 1
             progress = int((processed_files / total_files) * 100)
+            refined_data_with_chatgpt = ""
+            final_text = ""
 
             if file_path.lower().endswith('.pdf'):
-                final_text = ""
-                date = "No date found"  # Initialize date
 
-                # Process the entire PDF
-                for progress, text in process_pdf(file_path):
-                    refined_data = text
-                    # Skip ChatGPT refinement
-                    refined_data_with_chatgpt = refined_data
+                date = "No date found"
 
-                    # Extract date from the first page/line only
+                doc = fitz.open(file_path)
+                total_pages = len(doc)
+
+                if (total_pages < 5):
+                    for progress, text in process_pdf(file_path):
+
+                        refined_data_with_chatgpt = refine_text_with_chatgpt(
+                            text)
+
+                        final_text += refined_data_with_chatgpt
+
                     if date == "No date found":
-                        date = extract_date_with_regex(text.split('\n', 1)[0])
+                        date = extract_dates_with_chatgpt(
+                            final_text[:500])
 
-                    # Accumulate the text for the entire PDF
-                    final_text += refined_data_with_chatgpt
+                    # Ensure final_text is complete before yielding
+                    yield f"{progress}|{date}|{file_path}|{final_text}\n\n"
+                  # Initialize date
 
-                # Ensure final_text is complete before yielding
-                yield f"{progress}|{date}|{file_path}|{final_text}\n\n"
+                else:
+                    for progress, text in process_pdf(file_path):
+
+                        final_text += text
+
+                    if date == "No date found":
+                        date = extract_dates_with_chatgpt(
+                            final_text[:500])
+
+                    yield f"{progress}|{date}|{file_path}|{final_text}\n\n"
+
             else:
                 text = process_file(file_path)
                 word_count = len(text.split())
+
+                print(f"Word count: {word_count}")
 
                 if word_count <= 1000:
                     refined_data = text
@@ -350,9 +374,7 @@ def process_folder(folder_path):
                         refined_data_with_chatgpt)
                 else:
                     refined_data = text
-                    # Skip ChatGPT refinement
                     refined_data_with_chatgpt = text
-                    # Extract date from first page/line
                     date = extract_date_with_regex(text.split('\n', 1)[0])
 
                 text_by_date[date].append(
@@ -360,12 +382,11 @@ def process_folder(folder_path):
 
                 yield f"{progress}|{date}|{file_path}|{refined_data_with_chatgpt}\n\n"
 
-            del refined_data_with_chatgpt
+            if (refined_data_with_chatgpt is not None):
+                del refined_data_with_chatgpt
+            if (final_text is not None):
+                del final_text
             gc.collect()
-
-            # text = process_file(file_path)
-
-            # Check word count
 
     def parse_date(date_str):
         try:
