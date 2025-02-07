@@ -1,28 +1,19 @@
 from docx import Document
-import nltk
 import openai
-import spacy
 from flask import Flask, json, request, Response, jsonify
 from flask_cors import CORS
 import os
-import pytesseract
 import cv2
 import numpy as np
 import re
-from PIL import Image
-from pdf2image import convert_from_path
 from datetime import datetime
 from collections import defaultdict
 from google.cloud import vision
 from google.oauth2 import service_account
 from dotenv import load_dotenv
-from spellchecker import SpellChecker
 from werkzeug.utils import secure_filename
 import extract_msg
-import tempfile
-from bs4 import BeautifulSoup
 import gc
-from nltk.tokenize import sent_tokenize
 
 import fitz
 
@@ -31,13 +22,9 @@ CORS(app)
 
 load_dotenv()
 
-# nlp = spacy.load("en_core_web_sm")
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-
-# nltk.download('punkt', quiet=True)
 
 if credentials_json is None:
     raise ValueError(
@@ -47,8 +34,6 @@ credentials_info = json.loads(credentials_json)
 credentials = service_account.Credentials.from_service_account_info(
     credentials_info)
 client = vision.ImageAnnotatorClient(credentials=credentials)
-
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def correct_image_rotation(image):
@@ -101,10 +86,6 @@ def process_image(image_path):
 
     if vision_text.strip():
         return vision_text
-    else:
-        custom_config = r'--oem 3 --psm 6'
-        text = pytesseract.image_to_string(image_path, config=custom_config)
-        return text
 
 
 def process_pdf(pdf_path, chunk_size=5):
@@ -155,32 +136,6 @@ def normalize_text(text):
     return text.strip()
 
 
-def process_hocr(hocr_content):
-    soup = BeautifulSoup(hocr_content, 'html.parser')
-    lines = soup.find_all('span', class_='ocr_line')
-
-    formatted_text = ""
-    for line in lines:
-        words = line.find_all('span', class_='ocrx_word')
-        line_text = ' '.join(word.get_text() for word in words)
-        formatted_text += line_text + '\n'
-
-    return formatted_text
-
-
-def clean_text(text):
-    # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
-
-    # Remove common OCR artifacts
-    text = re.sub(r'[|]', '', text)
-
-    # Merge split words
-    text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
-
-    return text
-
-
 def process_msg(msg_path):
     text = ""
     try:
@@ -216,36 +171,6 @@ def process_file(file_path):
         return process_doc(file_path)
     else:
         return f"Unsupported file type: {file_path}"
-
-
-# def refine_text_with_spacy(ocr_text):
-#     ocr_text = re.sub(r"[✓✔]+", "", ocr_text)
-#     ocr_text = re.sub(r"[←→«»]+", "", ocr_text)
-#     ocr_text = re.sub(r"\bEdited\b.*\b\d{1,2}:\d{2} (?:AM|PM)", "", ocr_text)
-#     ocr_text = re.sub(r"\b\d{1,2}:\d{2} (?:AM|PM)\b", "", ocr_text)
-#     ocr_text = re.sub(r"\b[4G|LTE]+\b", "", ocr_text)
-#     ocr_text = re.sub(r"\s+", " ", ocr_text).strip()
-
-#     lines = ocr_text.splitlines()
-#     seen_lines = set()
-#     deduplicated_lines = []
-#     for line in lines:
-#         if line not in seen_lines:
-#             deduplicated_lines.append(line)
-#             seen_lines.add(line)
-
-#     deduplicated_text = "\n".join(deduplicated_lines)
-
-#     doc = nlp(deduplicated_text)
-
-#     dates = [ent.text for ent in doc.ents if ent.label_ == "DATE"]
-
-#     cleaned_text = " ".join([token.text for token in doc])
-
-#     return {
-#         "cleaned_text": cleaned_text.strip(),
-#         "dates": dates
-#     }
 
 
 def refine_text_with_chatgpt(refined_data):

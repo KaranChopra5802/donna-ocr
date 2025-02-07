@@ -4,10 +4,7 @@ FROM python:3.11-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies including Tesseract OCR
 RUN apt-get update && \
-    apt-get -qq -y install tesseract-ocr && \
-    apt-get -qq -y install libtesseract-dev && \
     apt install -y libgl1 && \
     apt-get install -y poppler-utils
 
