@@ -91,6 +91,39 @@
       <div id="progress">
         <div id="progressBar">0%</div>
       </div>
+      <h4>This is a utility to convert the following file types to text -</h4>
+      <ol>
+        <li>Images (.jpg, .jpeg, .png, .bmp, .tiff)</li>
+        <li>Outlook Files (.msg)</li>
+        <li>Word Documents (.docx, .doc)</li>
+        <li>PDF Documents (.pdf)</li>
+      </ol>
+      <h4>
+        The output will be saved in a zip file named <i>"scanned_files.zip"</i> or
+        <i>"ocr_files.zip"</i>" and will be available in your <i>"downloads"</i> folder.
+      </h4>
+      <h4>The zip file contains the following:</h4>
+      <ul>
+        <li>
+          Text_Conversion - All files are converted to .txt files and saved in
+          this folder individually.  There is a one to one mapping of each image/PDF file to a text file.
+        </li>
+        <li>
+          Date_Arrangement - All files related to a particular date are grouped
+          together.
+        </li>
+        <li>
+          combined_files.txt - All files converted to text are combined into one single 
+          text file in a chronological order (Latest file last)
+        </li>
+      </ul>
+      <h4 style="color: red">
+        NOTE : PDFs created from scanned images of more than 3 pages might contain some
+        junk characters.
+      </h4>
+      <br />
+      <h5>Provided to you with ❤ by Brainwave Technologies Pvt. Ltd.</h5>
+      <h5>Copyright @ 2025 - Brainwave Technologies Pvt. Ltd.</h5>
     </div>
 
     <script>
@@ -145,13 +178,13 @@
           console.log("Form data:", formData);
 
           const response = await fetch(
-            "https://donna-ocr.onrender.com/api/process-ocr",
-            //  "http://192.168.1.68:5000/api/process-ocr",
+            // "https://donna-ocr.onrender.com/api/process-ocr",
+            "http://192.168.1.68:5000/api/process-ocr",
             {
               method: "POST",
               body: formData,
             }
-          );  
+          );
 
           console.log("Response received:", response);
 
@@ -202,7 +235,7 @@
               // Add to fileTextDict for individual file storage
               newFileName = `${formattedDate}_${fileName}`;
               fileTextDict[newFileName] = textContent;
-            }else{
+            } else {
               textContent = chunk;
               let origialFileName = fileTextDict[newFileName];
               fileTextDict[newFileName] = origialFileName + textContent;
@@ -220,7 +253,13 @@
           // Create a combined file content with sorted dates
           const sortedDates = Object.keys(dateDict)
             .filter((date) => date !== "No date")
-            .sort((a, b) => new Date(a) - new Date(b)); // Sort by date
+            .sort((a, b) => {
+              const parseDate = (dateStr) => {
+                const [day, month, year] = dateStr.split("-").map(Number); // Split the date string
+                return new Date(year, month - 1, day); // Create a Date object (month is 0-based)
+              };
+              return parseDate(a) - parseDate(b); // Compare parsed Date objects
+            });
 
           let combinedContent = "";
           sortedDates.forEach((date) => {
@@ -244,7 +283,7 @@
             if (fileTextDict.hasOwnProperty(fileName)) {
               const content = fileTextDict[fileName];
 
-              const modifiedFileName = fileName.replace(/temp_/g, '');
+              const modifiedFileName = fileName.replace(/temp_/g, "");
               textConversionFolder.file(
                 modifiedFileName.replace(/[^a-zA-Z0-9.]/g, "_") + ".txt",
                 content
@@ -270,7 +309,7 @@
           zip.generateAsync({ type: "blob" }).then((content) => {
             const a = document.createElement("a");
             a.href = URL.createObjectURL(content);
-            a.download = "ocr_files.zip"; // Set the zip file name
+            a.download = "scanned_files.zip"; // Set the zip file name
             a.click();
           });
         } catch (error) {
@@ -279,7 +318,6 @@
         } finally {
           startOCRButton.disabled = false;
           startOCRButton.textContent = "Start Scan";
-          
         }
       });
     </script>
