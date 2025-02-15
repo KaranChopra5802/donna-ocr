@@ -161,13 +161,13 @@ def process_doc(doc_path):
 
 def process_file(file_path):
     _, ext = os.path.splitext(file_path.lower())
-    if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
+    if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.JPG', '.JPEG', '.PNG', '.BMP', '.TIFF']:
         return process_image(file_path)
-    elif ext == '.pdf':
+    elif ext in ['.pdf', '.PDF']:
         return process_pdf(file_path)
-    elif ext == '.msg':
+    elif ext in ['.msg','.MSG']:
         return process_msg(file_path)
-    elif ext in ['.doc', '.docx']:
+    elif ext in ['.doc', '.docx','.DOC', '.DOCX']:
         return process_doc(file_path)
     else:
         return f"Unsupported file type: {file_path}"
@@ -251,7 +251,7 @@ def process_folder(folder_path):
             refined_data_with_chatgpt = ""
             final_text = ""
 
-            if file_path.lower().endswith('.pdf'):
+            if file_path.lower().endswith('.pdf' or '.PDF'):
 
                 date = "No date found"
 
