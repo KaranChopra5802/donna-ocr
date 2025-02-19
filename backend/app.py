@@ -1,3 +1,4 @@
+import io
 from docx import Document
 import openai
 from flask import Flask, json, request, Response, jsonify
@@ -11,6 +12,7 @@ from collections import defaultdict
 from google.cloud import vision
 from google.oauth2 import service_account
 from dotenv import load_dotenv
+from pdf2image import convert_from_path
 from werkzeug.utils import secure_filename
 import extract_msg
 import gc
@@ -54,6 +56,41 @@ def correct_image_rotation(image):
         image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
     return rotated_image
+
+
+def is_pdf_ganda(file_path):
+
+    try:
+        doc = fitz.open(file_path)  # Open the PDF
+
+        # Extract metadata
+        metadata = doc.metadata or {}
+        print(metadata)
+        keywords = metadata.get("keywords", "").lower()
+        producer = metadata.get("producer", "").lower()
+        title = metadata.get("title", "").lower()
+        subject = metadata.get("subject", "").lower()
+
+        # 1. Keywords contain image file names (e.g., .jpg, .png)
+        if re.search(r'\.(jpg|jpeg|png|tiff|bmp)', keywords):
+            print("Keywords : ", keywords)
+            return True
+
+        # 2. Title or subject mentions "image", "scanned", or "converted from images"
+        if any(word in title + subject for word in ["image", "scanned", "converted from images"]):
+            print("word : ", title, subject)
+            return True
+
+        # 3. Producer suggests scanning tools (e.g., Adobe Paper Capture)
+        if "paper capture" in producer or "scan" in producer:
+            print("producer : ", producer)
+            return True
+
+        return False
+
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return None  # Return None if the file can't be processed
 
 
 def clean_temp_folder(folder_path):
@@ -114,6 +151,11 @@ def process_pdf(pdf_path, chunk_size=5):
     return text
 
 
+def remove_jargon(text):
+    text = re.sub(r"[^a-zA-Z0-9.,'’\s]", '', text)
+    return text
+
+
 def clean_text(text):
     # Remove extra whitespace
     text = re.sub(r'\s+', ' ', text).strip()
@@ -165,9 +207,9 @@ def process_file(file_path):
         return process_image(file_path)
     elif ext in ['.pdf', '.PDF']:
         return process_pdf(file_path)
-    elif ext in ['.msg','.MSG']:
+    elif ext in ['.msg', '.MSG']:
         return process_msg(file_path)
-    elif ext in ['.doc', '.docx','.DOC', '.DOCX']:
+    elif ext in ['.doc', '.docx', '.DOC', '.DOCX']:
         return process_doc(file_path)
     else:
         return f"Unsupported file type: {file_path}"
@@ -238,6 +280,31 @@ def extract_dates_with_chatgpt(refined_data):
         return refined_data
 
 
+def extract_text_from_pdf_google_vision(pdf_path):
+    """Extracts text from a scanned PDF using Google Vision API."""
+    images = convert_from_path(pdf_path)  # Convert PDF pages to images
+    full_text = ""
+
+    for i, image in enumerate(images):
+        image_bytes = io.BytesIO()
+        image.save(image_bytes, format="JPEG")
+        image_content = image_bytes.getvalue()
+
+        image = vision.Image(content=image_content)
+        response = client.document_text_detection(image=image)
+
+        if response.error.message:
+            raise Exception(
+                f"Google Vision API Error: {response.error.message}")
+
+        text = response.full_text_annotation.text
+        full_text += text + "\n\n"
+
+        # Progress calculation
+        progress = int((i + 1) / len(images) * 100)
+        yield progress, text  # Yielding progress and extracted text
+
+
 def process_folder(folder_path):
     text_by_date = defaultdict(list)
     total_files = sum([len(files) for r, d, files in os.walk(folder_path)])
@@ -251,28 +318,22 @@ def process_folder(folder_path):
             refined_data_with_chatgpt = ""
             final_text = ""
 
-            if file_path.lower().endswith('.pdf' or '.PDF'):
+            if file_path.lower().endswith('.pdf'):
 
                 date = "No date found"
+                final_text = ""
 
-                doc = fitz.open(file_path)
-                total_pages = len(doc)
+                print(f"is ganda : {is_pdf_ganda(file_path)}")
 
-                if (total_pages < 5):
-                    for progress, text in process_pdf(file_path):
+                if (is_pdf_ganda(file_path) == True):
 
-                        refined_data_with_chatgpt = refine_text_with_chatgpt(
-                            text)
-
-                        final_text += refined_data_with_chatgpt
+                    for progress, text in extract_text_from_pdf_google_vision(file_path):
+                        final_text += text
 
                     if date == "No date found":
-                        date = extract_dates_with_chatgpt(
-                            final_text[:500])
+                        date = extract_dates_with_chatgpt(final_text[:500])
 
-                    # Ensure final_text is complete before yielding
                     yield f"{progress}|{date}|{file_path}|{final_text}\n\n"
-                  # Initialize date
 
                 else:
                     for progress, text in process_pdf(file_path):
