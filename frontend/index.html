@@ -91,6 +91,17 @@
       <div id="progress">
         <div id="progressBar">0%</div>
       </div>
+
+      <div id="chatbotContainer" style="display: none">
+        <iframe
+          src="https://app.chaindesk.ai/agents/cm7nigq72002jjot0wre92qf3/iframe"
+          width="100%"
+          height="500px"
+          frameborder="0"
+          allow="clipboard-write"
+        ></iframe>
+      </div>
+
       <h4>This is a utility to convert the following file types to text -</h4>
       <ol>
         <li>Images (.jpg, .jpeg, .png, .bmp, .tiff)</li>
@@ -143,6 +154,18 @@
         </ol>
       </h4>
       <h4>
+        <!-- 
+        // Web component method for advanced customization
+        <script type="module">
+          import Chatbox from "https://cdn.jsdelivr.net/npm/@chaindesk/embeds@latest/dist/chatbox/index.js";
+
+          Chatbox.initStandard({
+            agentId: "cm7nigq72002jjot0wre92qf3",
+          });
+        </script> -->
+
+        <chaindesk-chatbox-standard style="width: 100%; height: 650px" />
+
         WE <b>DO NOT</b> STORE ANY DATA ON THE SERVER. ALL FILES ARE DELETED AS
         SOON AS THE PROCESSING IS COMPLETE.
       </h4>
@@ -204,7 +227,7 @@
 
           const response = await fetch(
             "https://donna-ocr.onrender.com/api/process-ocr",
-            // "http://192.168.20.18:5000/api/process-ocr",
+            // "http://192.168.1.68:5000/api/process-ocr",
             {
               method: "POST",
               body: formData,
@@ -338,6 +361,9 @@
             a.download = "scanned_files.zip"; // Set the zip file name
             a.click();
           });
+
+          document.getElementById("chatbotContainer").style.display = "block";
+          alert("Processing complete! You can now use the chatbot.");
         } catch (error) {
           console.error("Error:", error);
           alert("An error occurred during OCR processing.");

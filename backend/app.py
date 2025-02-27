@@ -19,6 +19,8 @@ import gc
 
 import fitz
 
+import requests
+
 app = Flask(__name__)
 CORS(app)
 
@@ -36,6 +38,135 @@ credentials_info = json.loads(credentials_json)
 credentials = service_account.Credentials.from_service_account_info(
     credentials_info)
 client = vision.ImageAnnotatorClient(credentials=credentials)
+
+CHAINDESK_API_KEY = os.getenv("CHAINDESK_API_KEY")
+CHAINDESK_API_URL = "https://app.chaindesk.ai/api"
+
+
+def get_existing_datasources():
+
+    headers = {
+        "Authorization": f"Bearer {CHAINDESK_API_KEY}",
+    }
+
+    response = requests.get(
+        f"{CHAINDESK_API_URL}/datastores/cm7nig1f40040322rx5smz4ko",
+        headers=headers,
+    )
+
+    response_data = response.json()
+
+    datasource_ids = [ds["id"] for ds in response_data.get("datasources", [])]
+
+    print("Data ID - ", datasource_ids)
+
+    return datasource_ids
+
+
+def delete_datasources():
+    datasource_ids = get_existing_datasources()
+
+    headers = {
+        "Authorization": f"Bearer {CHAINDESK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    for datasource_id in datasource_ids:
+        url = f"{CHAINDESK_API_URL}/datasources/{datasource_id}"
+        response = requests.delete(url, headers=headers)
+
+        if response.status_code == 200:
+            print(f"Deleted datasource {datasource_id} successfully.")
+        else:
+            print(f"Failed to delete datasource {datasource_id}. Response: {response.text}")
+
+
+def create_datasource(file_path: str, name: str, id: str):
+    """Create a datasource in Chaindesk from a text file"""
+    headers = {
+        "Authorization": f"Bearer {CHAINDESK_API_KEY}",
+    }
+
+    with open(file_path, "rb") as file:
+        files = {"file": (name, file, "text/plain")}
+
+        data = {
+            "type": "file",
+            "datastoreId": id
+        }
+
+        response = requests.post(
+            f"{CHAINDESK_API_URL}/datasources",
+            headers=headers,
+            data=data,
+            files=files
+        )
+    print("Created DataSource : ", response.json())
+
+    return response.json()
+
+
+@app.route('/api/create-chatbot', methods=['POST'])
+def create_chatbot():
+    try:
+        # Create a temporary file with all processed text
+        temp_text_file = os.path.join('temp', 'processed_data.txt')
+
+        # Get the text data from the request
+        text_data = request.json.get('text_data')
+
+        with open(temp_text_file, 'w', encoding='utf-8') as f:
+            f.write(text_data)
+
+    
+
+        # Create datasource in Chaindesk
+        datasource_response = create_datasource(
+            temp_text_file,
+            f"Document_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+
+        # Save the chatbot link
+      
+        # with open('chatbot_link.txt', 'w') as f:
+        #     json.dump(chatbot_data, f)
+
+        # return jsonify({
+        #     "success": True,
+        #     "chatbot_link": chatbot_data["chatbot_link"]
+        # }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+    finally:
+        # Clean up temporary files
+        if os.path.exists(temp_text_file):
+            os.remove(temp_text_file)
+
+
+@app.route('/api/get-chatbot-link', methods=['GET'])
+def get_chatbot_link():
+    try:
+        if os.path.exists('chatbot_link.txt'):
+            with open('chatbot_link.txt', 'r') as f:
+                chatbot_data = json.load(f)
+            return jsonify({
+                "success": True,
+                "chatbot_link": chatbot_data["chatbot_link"]
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": "No chatbot link found"
+            }), 404
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 
 def correct_image_rotation(image):
@@ -407,6 +538,7 @@ def process_ocr():
             return jsonify({"error": "No files provided"}), 400
 
         temp_folder = 'temp'
+        all_processed_text = []
 
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
@@ -431,7 +563,48 @@ def process_ocr():
         def generate():
             try:
                 for result in process_folder(temp_folder):
+                    progress, date, file_path, text = result.split('|', 3)
+                    all_processed_text.append(text)
                     yield f"data: {result}\n\n"
+
+                combined_text = "\n\n".join(all_processed_text)
+
+        # Create a temporary file with all processed text
+                temp_text_file = os.path.join('temp', 'processed_data.txt')
+
+                with open(temp_text_file, 'w', encoding='utf-8') as f:
+                    f.write(combined_text)
+
+                delete_datasources()
+
+                # Create datasource in Chaindesk
+
+                # datastore_response = create_datastore()
+
+                datasource_response = create_datasource(
+                    temp_text_file,
+                    f"Document_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    "cm7nig1f40040322rx5smz4ko"
+                )
+
+                # # Create chatbot agent
+                # agent_response = create_agent(
+                #     f"Document_Chatbot_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                #     [datasource_response['id']]
+                # )
+
+                # Save the chatbot link
+                # chatbot_data = {
+                #     "chatbot_id": agent_response['id'],
+                #     "chatbot_link": f"https://app.chaindesk.ai/agents/{agent_response['id']}/iframe",
+                #     "created_at": datetime.now().isoformat()
+                # }
+
+                # with open('chatbot_link.txt', 'w') as f:
+                #     json.dump(chatbot_data, f)
+
+                # yield f"data: CHATBOT_LINK|{chatbot_data['chatbot_link']}\n\n"
+
             finally:
                 clean_temp_folder(temp_folder)
 
