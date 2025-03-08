@@ -78,7 +78,8 @@ def delete_datasources():
         if response.status_code == 200:
             print(f"Deleted datasource {datasource_id} successfully.")
         else:
-            print(f"Failed to delete datasource {datasource_id}. Response: {response.text}")
+            print(
+                f"Failed to delete datasource {datasource_id}. Response: {response.text}")
 
 
 def create_datasource(file_path: str, name: str, id: str):
@@ -118,8 +119,6 @@ def create_chatbot():
         with open(temp_text_file, 'w', encoding='utf-8') as f:
             f.write(text_data)
 
-    
-
         # Create datasource in Chaindesk
         datasource_response = create_datasource(
             temp_text_file,
@@ -127,7 +126,7 @@ def create_chatbot():
         )
 
         # Save the chatbot link
-      
+
         # with open('chatbot_link.txt', 'w') as f:
         #     json.dump(chatbot_data, f)
 
@@ -268,9 +267,7 @@ def process_pdf(pdf_path, chunk_size=5):
         for i in range(start_page, end_page):
             page = doc[i]
             page_text = page.get_text()
-            cleaned_result = clean_text(page_text)
-            cleaned_result = normalize_text(cleaned_result)
-            chunk_text += f"\r\n{'='*40}\r\nPage {i+1}\r\n{'='*40}\r\n\n{cleaned_result}\r\n"
+            chunk_text += f"\r\n{'='*40}\r\nPage {i+1}\r\n{'='*40}\r\n\n{page_text}\r\n"
 
         text += chunk_text
 
@@ -454,8 +451,6 @@ def process_folder(folder_path):
                 date = "No date found"
                 final_text = ""
 
-                print(f"is ganda : {is_pdf_ganda(file_path)}")
-
                 if (is_pdf_ganda(file_path) == True):
 
                     for progress, text in extract_text_from_pdf_google_vision(file_path):
@@ -569,7 +564,6 @@ def process_ocr():
 
                 combined_text = "\n\n".join(all_processed_text)
 
-        # Create a temporary file with all processed text
                 temp_text_file = os.path.join('temp', 'processed_data.txt')
 
                 with open(temp_text_file, 'w', encoding='utf-8') as f:
@@ -577,33 +571,11 @@ def process_ocr():
 
                 delete_datasources()
 
-                # Create datasource in Chaindesk
-
-                # datastore_response = create_datastore()
-
                 datasource_response = create_datasource(
                     temp_text_file,
-                    f"Document_Dataset_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    f"Document_Dataset_1234",
                     "cm7nig1f40040322rx5smz4ko"
                 )
-
-                # # Create chatbot agent
-                # agent_response = create_agent(
-                #     f"Document_Chatbot_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                #     [datasource_response['id']]
-                # )
-
-                # Save the chatbot link
-                # chatbot_data = {
-                #     "chatbot_id": agent_response['id'],
-                #     "chatbot_link": f"https://app.chaindesk.ai/agents/{agent_response['id']}/iframe",
-                #     "created_at": datetime.now().isoformat()
-                # }
-
-                # with open('chatbot_link.txt', 'w') as f:
-                #     json.dump(chatbot_data, f)
-
-                # yield f"data: CHATBOT_LINK|{chatbot_data['chatbot_link']}\n\n"
 
             finally:
                 clean_temp_folder(temp_folder)
